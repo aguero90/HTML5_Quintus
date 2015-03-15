@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>TODO supply a title</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <style>
+            body{
+                background-color: #0c0c0c;
+            }
+
+            #quintus_container{
+                background-color: #222222;
+            }
+        </style>
+
+        <script src='http://cdn.html5quintus.com/v0.2.0/quintus-all.js'></script>
+    </head>
+    <body>
+
+        <script>
+            // decidiamo le impostazioni del gioco
+            var Q = Quintus()                          // crea una nuova istanza dell'engine
+                    .include("Sprites, Scenes, Input, 2D, Touch, UI, Audio") // Carichiamo i moduli che ci servono
+                    .setup({// aggiunge il canvas alla pagina
+                        width: 900, // imposta la larghezza del canvas a 900px
+                        height: 600, // imposta l'altezza del canvas a 600px
+                        scaleToFit: true               // diciamo che deve adattarsi alla pagina mantenendo l'aspect ratio
+                    })
+                    .controls()                        // aggiungiamo dei controlli di default (keyboard)
+                    .touch()                           // aggiungiamo dei controlli di default (touch)
+                    .enableSound();                    // abilitiamo il suono
+
+
+            // Creiamo la classe che identifica i player
+            Q.Sprite.extend("Player", {
+                init: function (p) {
+
+                    this._super(p, {
+                        sheet: "player",
+                        scale: 0.25,
+                        score: 0
+                    });
+
+                    this.add('2d, platformerControls');
+                },
+                step: function (dt) {
+                    // collisione "artigianale" con bound destro e sinistro
+                    if (this.p.x + (this.p.w - this.p.cx) * this.p.scale >= Q.width) {
+                        this.p.x = Q.width - (this.p.w - this.p.cx) * this.p.scale;
+                    } else if (this.p.x - this.p.cx * this.p.scale <= 0) {
+                        this.p.x = this.p.cx * this.p.scale;
+                    }
+                }
+            });
+
+
+            // Creiamo la classe che identifica i bonus
+            Q.Sprite.extend("Bonus", {
+                init: function (p) {
+                    this._super(p, {
+                        sheet: 'bonus',
+                        scale: 0.25,
+                        gravity: 0,
+                        createdTime: Date.now()
+                    });
+
+                    this.add('2d');
+
+                    this.on("hit.sprite", function (collision) {
+
+                        // Controlliamo se la collisione è avvenuta con il player
+                        if (collision.obj.isA("Player")) {
+                            collision.obj.p.score += 10;
+                            Q.stageScene("HUD", 1, {score: collision.obj.p.score});
+                            Q.audio.play("Coin.mp3");
+                        }
+
+                        // spostiamo il bonus (anche se la collisione è avvenuta con una piattaforma)
+                        this.set({x: Math.random() * Q.width, y: Math.random() * Q.height});
+                        this.p.createdTime = Date.now();
+                    });
+                },
+                step: function (dt) {
+                    // facciamo in modo che il bonus cambi posizione ogni 5 secondi
+                    if (Date.now() - this.p.createdTime > 5000) {
+                        this.set({x: Math.random() * Q.width, y: Math.random() * Q.height});
+                        this.p.createdTime = Date.now();
+                    }
+                }
+            });
+
+            // Creiamo la classe che identifica le piattaforme
+            Q.Sprite.extend("Platform", {
+                init: function (p) {
+                    this._super(p, {
+                        asset: "platform.png"
+                    });
+                }
+            });
+
+            // Creiamo il layer delle collisioni
+            Q.scene("level", function (stage) {
+
+                // Creiamo il player ed aggiungiamolo al livello
+                var player = stage.insert(new Q.Player());
+                player.set({x: player.p.cx, speed: 300, jumpSpeed: -600});
+
+                // Creiamo il bonus ed aggiungiamolo al livello
+                var bonus = stage.insert(new Q.Bonus({x: 180, y: 50}));
+
+                // Creiamo il pavimento come combinazione di 3 piattaforme
+                // allineate
+                var ground1 = stage.insert(new Q.Platform());
+                var ground2 = stage.insert(new Q.Platform());
+                var ground3 = stage.insert(new Q.Platform());
+
+                ground1.set({x: ground1.p.cx, y: Q.height});
+                ground2.set({x: ground2.p.cx + ground1.p.w, y: Q.height});
+                ground3.set({x: ground3.p.cx + ground1.p.w + ground2.p.w, y: Q.height});
+
+                // creiamo le piattaforme e le aggiungiamo al livello
+                var platform1 = stage.insert(new Q.Platform());
+                var platform2 = stage.insert(new Q.Platform());
+                var platform3 = stage.insert(new Q.Platform());
+                var platform4 = stage.insert(new Q.Platform());
+                var platform5 = stage.insert(new Q.Platform());
+                var platform6 = stage.insert(new Q.Platform());
+
+                platform1.set({x: platform1.p.cx + 7 * 30, y: 5 * 30, scale: 0.5});
+                platform2.set({x: platform2.p.cx + 20 * 30, y: 9 * 30, scale: 0.5});
+                platform3.set({x: platform3.p.cx + 0 * 30, y: 10 * 30, scale: 0.5});
+                platform4.set({x: platform4.p.cx + 12 * 30, y: 13 * 30, scale: 0.5});
+                platform5.set({x: platform5.p.cx + 2 * 30, y: 17 * 30, scale: 0.5});
+                platform6.set({x: platform6.p.cx + 18 * 30, y: 17 * 30, scale: 0.5});
+            });
+
+            // Creiamo il layer per l'HUD
+            Q.scene("HUD", function (stage) {
+
+                var text = stage.insert(new Q.UI.Text({
+                    label: "Score: " + stage.options.score,
+                    color: "white",
+                    x: 0,
+                    y: 0
+                }));
+
+                text.p.x = text.p.cx + 10;
+                text.p.y = text.p.cy + 10;
+            });
+
+
+            // precarichiamo tutti gli assets di cui abbiamo bisogno
+            Q.preload("platform.png");
+            Q.preload(["Background.mp3", "Background.ogg"]);
+            Q.preload(["Coin.mp3", "Coin.ogg"]);
+            Q.preload(["physics2d.png", "physics2d.json"]);
+            Q.preload(assetsLoaded);
+
+            // funzione chiamata una volta che TUTTI gli assets saranno stati caricati
+            function assetsLoaded() {
+
+                // Generiamo sprite dai dati JSON
+                // ogni sprite avrà il nome presente nel file JSON
+                // nel nostro esempio "player" e "bonus"
+                Q.compileSheets("physics2d.png", "physics2d.json");
+
+                // Mostriamo più in fondo il layer delle collisioni
+                // più in alto il layer dell'HUD
+                Q.stageScene("level", 0);
+                Q.stageScene("HUD", 1, {score: 0});
+
+                // avviamo l'audio di background
+                Q.audio.play("Background.mp3", {loop: true});
+            }
+        </script>
+
+    </body>
+</html>
