@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title></title>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <script src='lib/quintus.js'></script>
+        <script src='lib/quintus_sprites.js'></script>
+        <script src='lib/quintus_scenes.js'></script>
+        <script src='lib/quintus_input.js'></script>
+        <script src='lib/quintus_anim.js'></script>
+        <script src='lib/quintus_2d.js'></script>
+        <script src='lib/quintus_touch.js'></script>
+        <script src='lib/quintus_ui.js'></script>
+        <script src='lib/quintus_audio.js'></script>
+    </head>
+    <body style="background-color: #6888FF;">
+        <script>
+            // decidiamo le impostazioni del gioco
+            var Q = Quintus()                          // crea una nuova istanza dell'engine
+                    .include("Sprites, Scenes, Input, 2D, Touch, UI, Audio, Anim") // Carichiamo i moduli che ci servono
+                    .setup({// aggiunge il canvas alla pagina
+                        width: 900, // imposta la larghezza del canvas a 900px
+                        height: 600, // imposta l'altezza del canvas a 600px
+                        scaleToFit: true               // diciamo che deve adattarsi alla pagina mantenendo l'aspect ratio
+                    })
+                    .controls()                        // aggiungiamo dei controlli di default (keyboard)
+                    .touch()                           // aggiungiamo dei controlli di default (touch)
+                    .enableSound();                    // abilitiamo il suono
+
+
+            //player
+            Q.Sprite.extend("Player", {
+                init: function (p) {
+                    this._super(p, {
+                        sheet: "player", // Setting a sprite sheet sets sprite width and height
+                        sprite: "player",
+                        direction: "right",
+                        x: 110,
+                        y: 50,
+                        jumpSpeed: -380,
+                        scale: 0.5
+                    });
+                    this.add('2d, platformerControls');
+                },
+                step: function (dt) {
+                    if (Q.inputs['left'] && this.p.direction == 'right') {
+                        this.p.flip = 'x';
+                    }
+                    if (Q.inputs['right'] && this.p.direction == 'left') {
+                        this.p.flip = false;
+                    }
+                }
+            });
+
+
+            Q.scene("level1", function (stage) {
+
+                var background1 = new Q.TileLayer({dataAsset: 'level1.tmx', layerIndex: 0, sheet: 'tiles', tileW: 16, tileH: 16, type: Q.SPRITE_NONE});
+                stage.insert(background1);
+
+                var background2 = new Q.TileLayer({dataAsset: 'level1.tmx', layerIndex: 1, sheet: 'tiles', tileW: 16, tileH: 16, type: Q.SPRITE_NONE});
+                stage.insert(background2);
+
+                stage.collisionLayer(new Q.TileLayer({dataAsset: 'level1.tmx', layerIndex: 2, sheet: 'tiles', tileW: 16, tileH: 16}));
+
+                var player = stage.insert(new Q.Player());
+
+                stage.add("viewport").follow(player, {x: true, y: true}, {minX: 0, maxX: background1.p.w, minY: 0, maxY: background1.p.h + 200});
+
+            });
+
+
+            //load assets
+            Q.load("tiles_map.png, player.png, player.json, level1.tmx", function () {
+                Q.compileSheets("player.png", "player.json");
+                Q.animations("player", {
+                    walk_right: {frames: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], rate: 1 / 15, flip: false, loop: true},
+                    walk_left: {frames: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], rate: 1 / 15, flip: "x", loop: true},
+                    jump_right: {frames: [13], rate: 1 / 10, flip: false},
+                    jump_left: {frames: [13], rate: 1 / 10, flip: "x"},
+                    stand_right: {frames: [14], rate: 1 / 10, flip: false},
+                    stand_left: {frames: [14], rate: 1 / 10, flip: "x"},
+                    duck_right: {frames: [15], rate: 1 / 10, flip: false},
+                    duck_left: {frames: [15], rate: 1 / 10, flip: "x"},
+                    climb: {frames: [16, 17], rate: 1 / 3, flip: false}
+                });
+
+
+                Q.sheet("tiles", "tiles_map.png", {tilew: 16, tileh: 16});
+                Q.stageScene("level1");
+            });
+
+
+        </script>
+    </body>
+</html>
