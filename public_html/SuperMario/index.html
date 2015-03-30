@@ -3,6 +3,8 @@
     <head>
         <title></title>
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <script src='http://cdn.html5quintus.com/v0.2.0/quintus-all.js'></script>
+        <!--
         <script src='lib/quintus.js'></script>
         <script src='lib/quintus_sprites.js'></script>
         <script src='lib/quintus_scenes.js'></script>
@@ -12,20 +14,48 @@
         <script src='lib/quintus_touch.js'></script>
         <script src='lib/quintus_ui.js'></script>
         <script src='lib/quintus_audio.js'></script>
+        <script src='lib/quintus_tmx.js'></script>
+        -->
+        <style>
+
+            @font-face{
+                font-family: 'ComicaBDBold';
+                src: url(font/ComicaBDBold.ttf) format('truetype');
+            }
+
+            body {
+                margin: 0;
+                background-color: #0C0C0C;
+                font-family: "ComicaBDBold", Helvetica, Arial, sans-serif;
+            }
+
+            canvas{
+                margin-top: 20%;
+                background-color: #6888FF;
+            }
+
+        </style>
     </head>
-    <body style="background-color: #6888FF;">
+    <body>
         <script>
             // decidiamo le impostazioni del gioco
             var Q = Quintus()                          // crea una nuova istanza dell'engine
-                    .include("Sprites, Scenes, Input, 2D, Touch, UI, Audio, Anim") // Carichiamo i moduli che ci servono
+                    .include("Sprites, Scenes, Input, 2D, Touch, UI, Audio, Anim, TMX") // Carichiamo i moduli che ci servono
                     .setup({// aggiunge il canvas alla pagina
-                        width: 900, // imposta la larghezza del canvas a 900px
-                        height: 600, // imposta l'altezza del canvas a 600px
+                        width: 800, // imposta la larghezza del canvas a 900px
+                        height: 450, // imposta l'altezza del canvas a 600px
                         scaleToFit: true               // diciamo che deve adattarsi alla pagina mantenendo l'aspect ratio
                     })
                     .controls()                        // aggiungiamo dei controlli di default (keyboard)
                     .touch()                           // aggiungiamo dei controlli di default (touch)
-                    .enableSound();                    // abilitiamo il suono
+                    .enableSound(); // abilitiamo il suono
+
+            Q.boundaries = {
+                left: 0,
+                right: 250 * 16, // il numero di tiles in orizzontale per la loro larghezza,
+                upper: 0,
+                bottom: 30 * 16 // il numero di tiles in verticale per la loro altezza,
+            };
 
 
             //player
@@ -34,62 +64,293 @@
                     this._super(p, {
                         sheet: "player", // Setting a sprite sheet sets sprite width and height
                         sprite: "player",
-                        direction: "right",
-                        x: 110,
-                        y: 50,
-                        jumpSpeed: -380,
-                        scale: 0.5
+                        frame: 0,
+                        startPoint: {x: p.x, y: p.y},
+                        jumpSpeed: -400,
+                        speed: 300,
+                        upgraded: false,
+                        coins: 0,
+                        life: 3
                     });
-                    this.add('2d, platformerControls');
+
+                    this.add('2d, platformerControls, animation, tween');
+                },
+                death: function () {
+
+                    if (this.p.life === 0) {
+                        // gameOver();
+                    } else {
+                        this.p.life--;
+
+                        this.p.x = this.p.startPoint.x;
+                        this.p.y = this.p.startPoint.y;
+                        // aggiorniamo l'HUD
+                        Q.stageScene('HUD', 3, this.p);
+                    }
+
+                    Q.audio.play("Death.mp3");
                 },
                 step: function (dt) {
-                    if (Q.inputs['left'] && this.p.direction == 'right') {
-                        this.p.flip = 'x';
+
+                    // collisione "artigianale" con bound destro e sinistro
+                    if (this.p.x + (this.p.w - this.p.cx) * this.p.scale >= Q.boundaries.right) {
+                        this.p.x = Q.boundaries.right - (this.p.w - this.p.cx) * this.p.scale;
+                    } else if (this.p.x - this.p.cx * this.p.scale <= Q.boundaries.left) {
+                        this.p.x = Q.boundaries.left + (this.p.w - this.p.cx) * this.p.scale;
                     }
-                    if (Q.inputs['right'] && this.p.direction == 'left') {
-                        this.p.flip = false;
+
+                    // controllo contatto con bound inferiore del livello,
+                    // cioè il player è cascato e quindi è morto
+                    if (this.p.y + (this.p.h - this.p.cy) * this.p.scale > Q.boundaries.bottom) {
+                        this.death();
+                    } else if (this.p.y - (this.p.h - this.p.cy) * this.p.scale <= Q.boundaries.upper) {
+                        this.p.y = Q.boundaries.upper + (this.p.w - this.p.cx) * this.p.scale;
+                    }
+
+                    if (Q.inputs['down']) {
+
+                        this.p.vx = 0;
+                        this.play("duck");
+                    } else {
+                        if (this.p.vx > 0) {
+
+                            this.p.landed > 0 ? this.play("walk") : this.play("jump");
+                            this.p.flip = false;
+                        } else if (this.p.vx < 0) {
+
+                            this.p.landed > 0 ? this.play("walk") : this.play("jump");
+                            this.p.flip = "x";
+                        } else {
+
+                            this.play("stand");
+                        }
                     }
                 }
             });
+            //coins
+            Q.Sprite.extend("Coin", {
+                init: function (p) {
+                    this._super(p, {
+                        sheet: "tileset",
+                        frame: 10,
+                        gravity: 0
+                    });
+                    this.add('2d');
+                    this.on("bump.left, bump.right, bump.top, bump.bottom", "collected");
+                },
+                collected: function (collision) {
+
+                    if (collision.obj.isA("Player")) {
+
+                        this.destroy();
+
+                        if (collision.obj.p.coins === 99) {
+                            collision.obj.p.life++;
+                            collision.obj.p.coins = 0;
+
+                            Q.audio.play("1UP.mp3");
+                        } else {
+                            collision.obj.p.coins++;
+
+                            Q.audio.play("Coin.mp3");
+                        }
+
+                        // aggiorniamo l'HUD
+                        Q.stageScene('HUD', 3, collision.obj.p);
+                    }
+                }
+            });
+            //blocks
+            Q.Sprite.extend("Block", {
+                init: function (p) {
+
+                    this._super(p, {
+                        sheet: "tileset",
+                        frame: 13,
+                        gravity: 0
+                    });
+                    this.add('2d');
+                    this.on("bump.bottom", "hitted");
+                },
+                hitted: function (collision) {
+
+                    if (collision.obj.isA("Player") && this.p.frame === 13) {
+
+                        this.stage.insert(new Q.Mushroom({x: this.p.x, y: this.p.y - this.p.h}));
+                        // fai uscire il fungo
+                        this.p.frame = 15;
+                    }
+                }
+            });
+            //Mushrooms
+            Q.Sprite.extend("Mushroom", {
+                init: function (p) {
+
+                    this._super(p, {
+                        sheet: "tileset",
+                        frame: 11,
+                        vx: 70,
+                        sensor: true
+                    });
+                    this.add('2d');
+                    this.on("bump.left, bump.right, bump.top, bump.bottom", "collected");
+                    this.on("bump.left, bump.right", "changeDirection");
+                },
+                collected: function (collision) {
+
+                    if (collision.obj.isA("Player")) {
+
+                        this.destroy();
+                        if (!collision.obj.p.upgraded) {
+                            collision.obj.p.scale = 0.4;
+                            collision.obj.p.speed = 350;
+                            collision.obj.p.jumpSpeed = -450;
+                            collision.obj.p.upgraded = true;
+
+                            Q.audio.play("PowerUp.mp3");
+                        }
+
+                    }
+                },
+                changeDirection: function (collision) {
 
 
+                }
+            });
+            //FlagStick
+            Q.Sprite.extend("FlagBottom", {
+                init: function (p) {
+                    this._super(p, {
+                        sheet: "tileset",
+                        frame: 16,
+                        gravity: 0
+                    });
+                    this.add('2d');
+                    this.on("bump.left", "goToNextLevel");
+                },
+                goToNextLevel: function (collision) {
+
+                    if (collision.obj.isA("Player")) {
+
+                        Q.clearStages();
+                        Q.stageScene("level2");
+                        Q('Player').first().p.coins = 0;
+                        Q.stageScene('HUD', 3, Q('Player').first().p);
+                    }
+                }
+            });
+            //Flag
+            Q.Sprite.extend("Flag", {
+                init: function (p) {
+                    this._super(p, {
+                        sheet: "tileset",
+                        frame: 9,
+                        gravity: 0
+                    });
+                    this.add('2d');
+                    this.on("bump.left", "goToNextLevel");
+                },
+                goToNextLevel: function (collision) {
+
+                    if (collision.obj.isA("Player")) {
+
+                        Q.clearStages();
+                        Q.stageScene("level2");
+                        Q('Player').first().p.coins = 0;
+                        Q.stageScene('HUD', 3, Q('Player').first().p);
+                    }
+                }
+            });
+            //FlagTop
+            Q.Sprite.extend("FlagTop", {
+                init: function (p) {
+                    this._super(p, {
+                        sheet: "tileset",
+                        frame: 4,
+                        gravity: 0
+                    });
+                    this.add('2d');
+                    this.on("bump.left", "goToNextLevel");
+                },
+                goToNextLevel: function (collision) {
+
+                    if (collision.obj.isA("Player")) {
+
+                        Q.clearStages();
+                        Q.stageScene("level2");
+                        Q('Player').first().p.coins = 0;
+                        Q.stageScene('HUD', 3, Q('Player').first().p);
+                    }
+                }
+            });
             Q.scene("level1", function (stage) {
 
-                var background1 = new Q.TileLayer({dataAsset: 'level1.tmx', layerIndex: 0, sheet: 'tiles', tileW: 16, tileH: 16, type: Q.SPRITE_NONE});
-                stage.insert(background1);
-
-                var background2 = new Q.TileLayer({dataAsset: 'level1.tmx', layerIndex: 1, sheet: 'tiles', tileW: 16, tileH: 16, type: Q.SPRITE_NONE});
-                stage.insert(background2);
-
-                stage.collisionLayer(new Q.TileLayer({dataAsset: 'level1.tmx', layerIndex: 2, sheet: 'tiles', tileW: 16, tileH: 16}));
-
-                var player = stage.insert(new Q.Player());
-
-                stage.add("viewport").follow(player, {x: true, y: true}, {minX: 0, maxX: background1.p.w, minY: 0, maxY: background1.p.h + 200});
-
+                Q.stageTMX("level1.tmx", stage);
+                stage.add("viewport").follow(Q("Player").first(), {x: true, y: true}, {minX: Q.boundaries.left, maxX: Q.boundaries.right, minY: Q.boundaries.upper, maxY: Q.boundaries.bottom});
             });
+            Q.scene("level2", function (stage) {
 
+                Q.stageTMX("level2.tmx", stage);
+                stage.add("viewport").follow(Q("Player").first(), {x: true, y: true}, {minX: Q.boundaries.left, maxX: Q.boundaries.right, minY: Q.boundaries.upper, maxY: Q.boundaries.bottom});
+            });
+            Q.scene('HUD', function (stage) {
 
+                var container = stage.insert(new Q.UI.Container({x: 10, y: 10}));
+
+                container.insert(new Q.UI.Button({
+                    asset: 'coin.png',
+                    x: 23,
+                    y: 25,
+                    scale: 0.5
+                }));
+
+                container.insert(new Q.UI.Text({
+                    x: 50,
+                    y: 26,
+                    label: "x" + stage.options.coins,
+                    color: "white",
+                    scale: 0.7,
+                    family: "ComicaBDBold",
+                    weight: 400,
+                    size: 27
+                }));
+
+                container.insert(new Q.UI.Button({
+                    asset: 'life.png',
+                    x: 23,
+                    y: 60,
+                    scale: 0.5
+                }));
+
+                container.insert(new Q.UI.Text({
+                    x: 50,
+                    y: 61,
+                    label: "x" + stage.options.life,
+                    color: "white",
+                    scale: 0.7,
+                    family: "ComicaBDBold",
+                    weight: 400,
+                    size: 27
+                }));
+                container.fit(20);
+            });
             //load assets
-            Q.load("tiles_map.png, player.png, player.json, level1.tmx", function () {
-                Q.compileSheets("player.png", "player.json");
-                Q.animations("player", {
-                    walk_right: {frames: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], rate: 1 / 15, flip: false, loop: true},
-                    walk_left: {frames: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], rate: 1 / 15, flip: "x", loop: true},
-                    jump_right: {frames: [13], rate: 1 / 10, flip: false},
-                    jump_left: {frames: [13], rate: 1 / 10, flip: "x"},
-                    stand_right: {frames: [14], rate: 1 / 10, flip: false},
-                    stand_left: {frames: [14], rate: 1 / 10, flip: "x"},
-                    duck_right: {frames: [15], rate: 1 / 10, flip: false},
-                    duck_left: {frames: [15], rate: 1 / 10, flip: "x"},
-                    climb: {frames: [16, 17], rate: 1 / 3, flip: false}
-                });
+            Q.loadTMX("level1.tmx, level2.tmx, player.png, player.json, 1UP.mp3, 1UP.ogg, Background.mp3, Background.ogg, Coin.mp3, Coin.ogg, Death.mp3, Death.ogg, PowerUp.mp3, PowerUp.ogg, coin.png, life.png",
+                    function () {
+                        Q.compileSheets("player.png", "player.json");
+                        Q.animations("player", {
+                            walk: {frames: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], rate: 1 / 15, loop: true},
+                            jump: {frames: [13], rate: 1 / 10},
+                            stand: {frames: [14], rate: 1 / 10},
+                            duck: {frames: [15], rate: 1 / 10},
+                            climb: {frames: [16, 17], rate: 1 / 3, flip: false}
+                        });
+                        Q.stageScene("level1");
+                        Q.stageScene('HUD', 3, Q('Player').first().p);
 
-
-                Q.sheet("tiles", "tiles_map.png", {tilew: 16, tileh: 16});
-                Q.stageScene("level1");
-            });
-
+                        // avviamo l'audio di background
+                        Q.audio.play("Background.mp3", {loop: true});
+                    });
 
         </script>
     </body>

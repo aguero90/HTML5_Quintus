@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <title>TODO supply a title</title>
+        <script src='http://cdn.html5quintus.com/v0.2.0/quintus-all.js'></script>
+        <style>
+            canvas { background-color: #5e81a2; }
+        </style>
+    </head>
+    <body>
+        <script>
+            // This game uses spritesheet.png from:
+            // http://opengameart.org/content/platform-tileset-nature
+            var Q = Quintus()
+                    .include("Sprites, Scenes, Anim, Input, 2D, Touch, UI, TMX")
+                    .setup({maximize: true})
+                    .controls()
+                    .touch();
+
+            // Give us a player from the same tilesheet
+
+            Q.Sprite.extend("Player",
+                    {
+                        init: function (properties)
+                        {
+                            // Same name as in the tiled editor
+                            properties.sheet = "player";
+                            // Square in the tile set
+                            properties.frame = 0;
+
+                            this._super(properties);
+
+                            this.add("2d");
+                            this.add("platformerControls");
+                        }
+                    });
+
+
+            // coin dallo stesso tileset della mappa
+            Q.Sprite.extend("Coin",
+                    {
+                        init: function (properties)
+                        {
+                            // Same name as in the tiled editor
+                            properties.sheet = "tileset";
+                            // Square in the tile set
+                            properties.frame = 10;
+
+                            this._super(properties);
+                        }
+                    });
+
+
+            // Load TMX File as a scene
+            Q.scene("level1", function (stage)
+            {
+                Q.stageTMX("livello1.tmx", stage);
+
+                // var player = Q("Player").first();
+            });
+
+
+            // Load assets and launch the first scene to start the game
+            //
+            Q.loadTMX("livello1.tmx", function () {
+                Q.stageScene("level1");
+            });
+        </script>
+    </body>
+</html>
